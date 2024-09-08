@@ -1,4 +1,58 @@
-```vue
+<!--登录页面-->
+<template>
+  <div class="login">
+    <el-form class="form" :model="model" :rules="rules" ref="loginForm">
+      <h1 class="title">尚品甄选后台管理系统</h1>
+      <el-form-item prop="userName">
+        <el-input
+          class="text"
+          v-model="model.userName"
+          prefix-icon="User"
+          clearable
+          :placeholder="$t('login.username')"
+        />
+      </el-form-item>
+      <el-form-item prop="password">
+        <el-input
+          class="text"
+          v-model="model.password"
+          prefix-icon="Lock"
+          show-password
+          clearable
+          :placeholder="$t('login.password')"
+        />
+      </el-form-item>
+
+      <el-form-item prop="captcha">
+          <div class="captcha">
+              <el-input
+                        class="text"
+                        v-model="model.captcha"
+                        prefix-icon="Picture"
+                        placeholder="请输入验证码"
+                        ></el-input>
+              <img :src="captchaSrc" @click="refreshCaptcha" />
+          </div>
+      </el-form-item>
+
+      <el-form-item>
+        <el-button
+          :loading="loading"
+          type="primary"
+          class="btn"
+          size="large"
+          @click="submit"
+        >
+          {{ btnText }}
+        </el-button>
+      </el-form-item>
+    </el-form>
+  </div>
+  <div class="change-lang">
+    <change-lang />
+  </div>
+</template>
+
 <script>
 import {
   defineComponent,
@@ -7,32 +61,96 @@ import {
   toRefs,
   ref,
   computed,
+  onMounted,
   watch,
 } from 'vue'
-import { Login } from '@/api/login'   // 导入登录发送请求所需要的js文件
-import { useRouter, useRoute } from 'vue-router'		// 导入路由组件
-import { useApp } from '@/pinia/modules/app'	// 从pinia中导入useApp模块
+import { Login , GetValidateCode } from '@/api/login'
+import { useRouter, useRoute } from 'vue-router'
+import ChangeLang from '@/layout/components/Topbar/ChangeLang.vue'
+import useLang from '@/i18n/useLang'
+import { useApp } from '@/pinia/modules/app'
+
 export default defineComponent({
+  components: { ChangeLang },
   name: 'login',
   setup() {
-    const route = useRoute()	// 获取当前路由对象
+    const { proxy: ctx } = getCurrentInstance() // 可以把ctx当成vue2中的this
+    const router = useRouter()
+    const route = useRoute()
+    const { lang } = useLang()
+    watch(lang, () => {
+      state.rules = getRules()
+    })
+    const getRules = () => ({
+      userName: [
+        {
+          required: true,
+          message: ctx.$t('login.rules-username'),
+          trigger: 'blur',
+        },
+      ],
+      password: [
+        {
+          required: true,
+          message: ctx.$t('login.rules-password'),
+          trigger: 'blur',
+        },
+        {
+          min: 6,
+          max: 12,
+          message: ctx.$t('login.rules-regpassword'),
+          trigger: 'blur',
+        },
+      ],
+      captcha: [
+        {
+            required: true,
+            message: ctx.$t('login.rules-validate-code'),
+            trigger: 'blur',
+        },
+      ],
+
+    })
+
+    // onMounted钩子函数
+    onMounted(() => {
+      state.refreshCaptcha()
+    })
+
     const state = reactive({
-      model: {  // 登录表单默认的用户名和密码
+      model: {
         userName: 'admin',
-        password: '123456',
+        password: '111111',
+        captcha: '',      // 用户输入的验证码
+        codeKey: ''       // 后端返回的验证码key
       },
-      submit: () => { // 登录方法
+      rules: getRules(),
+      loading: false,
+      captchaSrc: "" ,
+      refreshCaptcha: async () => {
+          const { data } = await GetValidateCode() ;
+          state.model.codeKey = data.codeKey
+          state.captchaSrc = data.codeValue
+      },
+      btnText: computed(() =>
+        state.loading ? ctx.$t('login.logining') : ctx.$t('login.login')
+      ),
+      loginForm: ref(null),
+      submit: () => {
+        if (state.loading) {
+          return
+        }
         state.loginForm.validate(async valid => {
-          if (valid) {  // 校验数据的合法性，合法执行下述代码
+          if (valid) {
             state.loading = true
-            const { code, data, message } = await Login(state.model)  // 调用登录方法
-            if (+code === 200) {  // 返回的状态码如果为200，给出登录成功提示信息
+            const { code, data, message } = await Login(state.model)
+            if (+code === 200) {
               ctx.$message.success({
-                message: ctx.$t('login.loginsuccess'),	// 读取i18n中locals/zh-cn/login.js中的内容
+                message: ctx.$t('login.loginsuccess'),
                 duration: 1000,
               })
 
-              const targetPath = decodeURIComponent(route.query.redirect)	
+              const targetPath = decodeURIComponent(route.query.redirect)
               if (targetPath.startsWith('http')) {
                 // 如果是一个url地址
                 window.location.href = targetPath
@@ -40,10 +158,10 @@ export default defineComponent({
                 // 如果是内部路由地址
                 router.push(targetPath)
               } else {
-                router.push('/')  // 登录成功以后进行路由 , 查看src/router/index.js的路由配置
+                router.push('/')    // 请求成功以后，进入到首页
               }
-              useApp().initToken(data)  // 保存后端返回给前端的数据
-            } else {  // 登录失败给出错误提示信息
+              useApp().initToken(data)
+            } else {
               ctx.$message.error(message)
             }
             state.loading = false
@@ -51,10 +169,91 @@ export default defineComponent({
         })
       },
     })
+
     return {
       ...toRefs(state),
     }
   },
 })
 </script>
-```
+
+<style lang="scss" scoped>
+.login {
+  transition: transform 1s;
+  transform: scale(1);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #2d3a4b;
+  .form {
+    width: 520px;
+    max-width: 100%;
+    padding: 0 24px;
+    box-sizing: border-box;
+    margin: 160px auto 0;
+    :deep {
+      .el-input__wrapper {
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+        background: rgba(0, 0, 0, 0.1);
+      }
+      .el-input-group--append > .el-input__wrapper {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+      .el-input-group--prepend > .el-input__wrapper {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+      }
+    }
+    .title {
+      color: #fff;
+      text-align: center;
+      font-size: 24px;
+      margin: 0 0 24px;
+    }
+    .text {
+      font-size: 16px;
+      :deep(.el-input__inner) {
+        color: #fff;
+        height: 48px;
+        line-height: 48px;
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.2);
+        }
+      }
+    }
+    .btn {
+      width: 100%;
+    }
+  }
+}
+
+.captcha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.captcha img {
+  cursor: pointer;
+  margin-left: 20px;
+}
+
+.change-lang {
+  position: fixed;
+  right: 20px;
+  top: 20px;
+  :deep {
+    .change-lang {
+      height: 24px;
+      &:hover {
+        background: none;
+      }
+      .icon {
+        color: #fff;
+      }
+    }
+  }
+}
+</style>

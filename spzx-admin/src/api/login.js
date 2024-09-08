@@ -9,21 +9,37 @@
  * @Github: https://github.com/huzhushan/vue3-element-admin
  * @Donate: https://huzhushan.gitee.io/vue3-element-admin/donate/
  */
-import request from '@/utils/request'
+import request from '@/utils/request'		// 导入utils中的request.js
 
 // 登录接口
 export const Login = data => {
   return request({
-    url: '/api/login',
+    url: '/admin/system/index/login',
     method: 'post',
     data,
+  })
+}
+
+// 获取验证码
+export const GetValidateCode = () => {
+  return request({
+    url: "/admin/system/index/generateValidateCode",
+    method: 'get'
   })
 }
 
 // 获取登录用户信息
 export const GetUserinfo = () => {
   return request({
-    url: '/api/userinfo',
+    url: '/admin/system/index/getUserInfo',
     method: 'get',
+  })
+}
+
+// 退出功能
+export const Logout = () => {
+  return request({
+      url: '/admin/system/index/logout',
+      method: 'get',
   })
 }
